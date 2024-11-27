@@ -1,0 +1,163 @@
+import matplotlib as mlt
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import confusion_matrix, classification_report, precision_recall_curve, auc
+import matplotlib.pyplot as plt
+import shap
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+
+rfc = RandomForestClassifier(random_state=0, n_estimators=30, min_samples_split=10, min_samples_leaf=27,
+                                         max_features='sqrt', max_depth=75, criterion= 'entropy', class_weight='balanced', bootstrap=True)
+
+# Load data
+data = pd.read_excel('dataset_antibacterial_all_polymers_no_70%.xlsx')
+X = data.drop(columns=['Index', 'MIC_values', 'MIC_Category_64', 'MIC_Category_32', 'MIC_32_64'])
+Y = data['MIC_Category_64']
+
+# Standardize data
+sc = StandardScaler()
+X_scaled = sc.fit_transform(X)
+X_scaled = pd.DataFrame(X_scaled, columns = X.columns, index = X.index.values.tolist())
+# Split data
+X_train, X_test, Y_train, Y_test = train_test_split(X_scaled, Y, test_size=0.2, random_state=0, stratify=Y)
+
+pearson = X_scaled.corr("pearson")
+
+pd.set_option('display.max_columns', None)
+print(pearson)
+
+rfc = rfc.fit(X_train,Y_train.values.ravel())
+Y_pred = rfc.predict(X_test)
+cm = confusion_matrix(Y_test, Y_pred)
+print(cm)
+
+TN, FP, FN, TP = cm.ravel()
+print("True Positive: ", TP)
+print("True Negative: ", TN)
+print("False Positive: ", FP)
+print("False Negative: ", FN)
+report = classification_report(Y_test, Y_pred, target_names=["Bad", "Good"])
+
+shap.initjs()
+
+explainer = shap.TreeExplainer(rfc, X_scaled)
+print(X.columns)
+shap_values = explainer.shap_values(X_scaled, check_additivity=False)
+print(shap_values)
+
+mean_abs_shap_values = np.mean(np.abs(shap_values), axis=0)
+print(mean_abs_shap_values[:,0])
+print(mean_abs_shap_values[:,1])
+total_mean_abs = mean_abs_shap_values[:,0] + mean_abs_shap_values[:,1]
+print(total_mean_abs)
+mean_shap_values_df_bad = pd.DataFrame({'Feature': X.columns, 'MeanAbsSHAP_Bad': mean_abs_shap_values[:,0]})
+mean_shap_values_df_good = pd.DataFrame({'Feature': X.columns, 'MeanAbsSHAP_Good': mean_abs_shap_values[:,1]})
+total_mean_abs_shap_values_df = pd.DataFrame({'Feature': X.columns, 'TotalMeanAbsSHAP': total_mean_abs})
+
+# Sort values in descending order
+mean_shap_values_df_bad = mean_shap_values_df_bad.sort_values(by='MeanAbsSHAP_Bad', ascending=False)
+mean_shap_values_df_good = mean_shap_values_df_good.sort_values(by='MeanAbsSHAP_Good', ascending=False)
+total_mean_abs_shap_values_df= total_mean_abs_shap_values_df.sort_values(by='TotalMeanAbsSHAP', ascending = False)
+# Create bar plot
+plt.figure(figsize=(60, 40))
+plt.bar(mean_shap_values_df_bad['Feature'], mean_shap_values_df_bad['MeanAbsSHAP_Bad'], color='red')
+plt.xlabel('Mean |SHAP value|', size = 80)
+plt.ylabel('Feature', size = 80)
+plt.yticks(size = 60)
+plt.xticks(rotation = 15, ha = "right", size = 50)
+plt.title('Feature Importance - Mean Absolute SHAP Values (bad)', size = 80)
+plt.autoscale()
+plt.show()
+
+plt.figure(figsize=(60, 30))
+plt.bar(mean_shap_values_df_good['Feature'], mean_shap_values_df_good['MeanAbsSHAP_Good'], color='blue')
+plt.xlabel('Mean |SHAP value|')
+plt.ylabel('Feature')
+plt.xticks(rotation = 45, ha = "right", size = 20)
+plt.title('Feature Importance - Mean Absolute SHAP Values (good)')
+plt.show()
+
+plt.figure(figsize=(60, 30))
+plt.bar(total_mean_abs_shap_values_df['Feature'], total_mean_abs_shap_values_df['TotalMeanAbsSHAP'], color='green')
+plt.xlabel('Total |SHAP value|')
+plt.ylabel('Feature')
+plt.xticks(rotation = 45, ha = "right", size = 20)
+plt.title('Feature Importance (Total Absolute SHAP Values)')
+plt.show()
+
+# Top ten most important features that influence SHAP for MIC64 = Cat1
+index_of_cLogP_predicted = data.columns.get_loc('cLogP_predicted')
+index_of_hydrophobic_composition = data.columns.get_loc('hydrophobic_composition')
+index_of_NIPAM_composition = data.columns.get_loc('NIPAM_composition')
+index_of_hydrophilic_composition = data.columns.get_loc('hydrophilic_composition')
+index_of_cationic_composition = data.columns.get_loc('cationic_composition')
+index_of_has_PEA = data.columns.get_loc('has_PEA')
+index_of_net_charge= data.columns.get_loc('net_charge')
+
+Y_net_charge = shap_values[:,index_of_net_charge-1][:,0]
+X_net_charge = X['net_charge']
+
+Y_has_PEA = shap_values[:,index_of_has_PEA-1][:,0]
+X_has_PEA = X['has_PEA']
+
+Y_cationic = shap_values[:,index_of_cationic_composition-1][:,0]
+X_cationic = X['cationic_composition']
+
+Y_cLogP_predicted = shap_values[:,index_of_cLogP_predicted-1][:,0]
+X_cLogP_predicted = X['cLogP_predicted']
+
+Y_hydrophobic = shap_values[:,index_of_hydrophobic_composition-1][:,0]
+X_hydrophobic = X['hydrophobic_composition']
+
+Y_NIPAM_composition = shap_values[:,index_of_NIPAM_composition-1][:,0]
+X_NIPAM_composition = X['NIPAM_composition']
+
+Y_hydrophilic = shap_values[:,index_of_hydrophilic_composition-1][:,0]
+X_hydrophilic = X['hydrophilic_composition']
+
+
+fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(12, 9))
+# plot on each of the subplots
+
+axes[0, 0].scatter(X_hydrophobic, Y_hydrophobic,color = 'red', s=5)
+axes[0, 0].set_xlabel('hydrophobic_composition',fontsize=10)
+axes[0, 0].axvline(x=0.15, color='k', linestyle='dotted')
+axes[0, 0].axhline(y=0, color='k', linestyle='dotted')
+
+axes[0, 1].scatter(X_cLogP_predicted, Y_cLogP_predicted,color = 'red', s=5)
+axes[0, 1].set_xlabel('cLogP_predicted',fontsize=10)
+axes[0, 1].axvline(x=-0.3, color='k', linestyle='dotted')
+axes[0, 1].axhline(y=0, color='k', linestyle='dotted')
+
+axes[0, 2].scatter(X_hydrophilic, Y_hydrophilic,color = 'red', s=5)
+axes[0, 2].set_xlabel('hydrophilic_composition',fontsize=10)
+axes[0, 2].axvline(x=0.15, color='k', linestyle='dotted')
+axes[0, 2].axhline(y=0, color='k', linestyle='dotted')
+
+axes[1, 0].scatter(X_has_PEA, Y_has_PEA,color = 'red', s=5)
+axes[1, 0].set_xlabel('has_PEA',fontsize=10)
+axes[1, 0].axhline(y=0, color='k', linestyle='dotted')
+
+axes[1, 1].scatter(X_net_charge, Y_net_charge,color = 'red', s=5)
+axes[1, 1].set_xlabel('net_charge',fontsize=10)
+axes[1, 1].axhline(y=0, color='k', linestyle='dotted')
+
+axes[1, 2].scatter(X_NIPAM_composition, Y_NIPAM_composition,color = 'red', s=5)
+axes[1, 2].set_xlabel('NIPAM_composition',fontsize=10)
+axes[1, 2].axvline(x=0.05, color='k', linestyle='dotted')
+axes[1, 2].axhline(y=0, color='k', linestyle='dotted')
+
+# set overall title and adjust subplot spacing
+plt.subplots_adjust(hspace=0.4, wspace=0.3)
+#fig.text(0.5, 0.03, 'feature values', ha='center', va='center', fontsize=14)
+fig.text(0.03, 0.5, 'SHAP values (bad) - Cat0: MIC>64', ha='center', va='center', rotation='vertical', fontsize=14)
+plt.show()
