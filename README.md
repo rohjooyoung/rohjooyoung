@@ -4,7 +4,7 @@
 - 💞️ I’m looking to collaborate on ... Chemical Engineering projects
 - 📫 How to reach me ... Boyerlab homepage
 - 😄 Pronouns: He
-- ⚡ Fun fact: PhD candidate
+- ⚡ Fun fact: PhD candidate at UNSW
 
 <!---
 rohjooyoung/rohjooyoung is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
